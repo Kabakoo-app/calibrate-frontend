@@ -61,10 +61,24 @@ export default function SignupPage() {
   const [showPasswordRequirements, setShowPasswordRequirements] = useState(false);
   // The page a shared link pointed at, kept on the URL by the middleware
   const [authSearch, setAuthSearch] = useState("");
+  // Signup is invite-only: both come from the invite link, e.g.
+  // /signup?invite=<token>&email=<email>. Null until read from the URL, so
+  // the gate below doesn't flash the form before that happens.
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [emailLocked, setEmailLocked] = useState(false);
 
   useEffect(() => {
     document.title = "Sign Up | Calibrate";
     setAuthSearch(window.location.search);
+
+    const params = new URLSearchParams(window.location.search);
+    const invite = params.get("invite");
+    const invitedEmail = params.get("email");
+    setInviteToken(invite);
+    if (invitedEmail) {
+      setEmail(invitedEmail);
+      setEmailLocked(true);
+    }
   }, []);
 
   const passwordAnalysis = useMemo(() => getPasswordStrength(password), [password]);
@@ -72,6 +86,7 @@ export default function SignupPage() {
   const passwordsMatch = password === confirmPassword;
 
   const canSubmit =
+    !!inviteToken &&
     firstName.trim() &&
     lastName.trim() &&
     email.trim() &&
@@ -82,6 +97,11 @@ export default function SignupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    if (!inviteToken) {
+      setError("This signup link is missing its invite token.");
+      return;
+    }
 
     // Client-side validation matching backend requirements
     if (email.trim().length < 3) {
@@ -112,6 +132,7 @@ export default function SignupPage() {
           last_name: lastName.trim(),
           email: email.trim(),
           password,
+          invite_token: inviteToken,
         }),
       });
 
@@ -248,6 +269,14 @@ export default function SignupPage() {
                 </div>
               )}
 
+              {!error && inviteToken === null && (
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm">
+                  This page requires an invite link from a workspace owner or
+                  admin. If you have one, use it directly rather than typing
+                  in your details here.
+                </div>
+              )}
+
               {/* Name Row */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -300,7 +329,15 @@ export default function SignupPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="john@example.com"
                   required
-                  className="w-full px-4 py-2.5 rounded-xl border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
+                  readOnly={emailLocked}
+                  title={
+                    emailLocked
+                      ? "This invite link is tied to this email address"
+                      : undefined
+                  }
+                  className={`w-full px-4 py-2.5 rounded-xl border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${
+                    emailLocked ? "bg-gray-50 cursor-not-allowed" : ""
+                  }`}
                 />
               </div>
 

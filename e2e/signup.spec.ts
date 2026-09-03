@@ -5,7 +5,11 @@ import { test, expect } from "./fixtures";
 
 test.describe("Signup page", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/signup");
+    // Signup is invite-only: the submit button stays disabled with no
+    // invite token in the URL (see the "signup requires an invitation" gate
+    // in the backend). Only `invite` is set here, not `email`, so the email
+    // field stays empty and editable for the existing fill()-based tests.
+    await page.goto("/signup?invite=e2e-test-invite-token");
   });
 
   test("renders the signup form", async ({ page }) => {
@@ -71,5 +75,37 @@ test.describe("Signup page", () => {
   test("links to the login page", async ({ page }) => {
     await page.getByRole("link", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/login$/);
+  });
+});
+
+test.describe("Signup page without an invite", () => {
+  test("shows the invite-required notice and keeps submit disabled", async ({
+    page,
+  }) => {
+    await page.goto("/signup");
+    await expect(
+      page.getByText("This page requires an invite link"),
+    ).toBeVisible();
+
+    await page.getByPlaceholder("John", { exact: true }).fill("Ada");
+    await page.getByPlaceholder("Doe", { exact: true }).fill("Lovelace");
+    await page.getByPlaceholder("john@example.com").fill("ada@example.com");
+    await page.getByPlaceholder("Create a strong password").fill("secret123");
+    await page.getByPlaceholder("Confirm your password").fill("secret123");
+
+    await expect(
+      page.getByRole("button", { name: "Create account" }),
+    ).toBeDisabled();
+  });
+});
+
+test.describe("Signup page with a pre-filled invite email", () => {
+  test("locks the email field to the invited address", async ({ page }) => {
+    await page.goto(
+      "/signup?invite=e2e-test-invite-token&email=invitee@example.com",
+    );
+    const emailInput = page.getByPlaceholder("john@example.com");
+    await expect(emailInput).toHaveValue("invitee@example.com");
+    await expect(emailInput).toHaveAttribute("readonly", "");
   });
 });
